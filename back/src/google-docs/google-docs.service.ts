@@ -79,7 +79,16 @@ export class GoogleDriveService {
         q: `'${email}' in writers or '${email}' in readers`,
         fields: 'nextPageToken, files(id, name, parents, mimeType)',
       });
-      return res.data.files;
+      const files = res.data.files;
+
+      const filesWithPathsAndTypes = await Promise.all(
+        files.map(async (file) => {
+          const path = await this.buildFilePath(file);
+          const fileType = this.getFileType(file.mimeType);
+          return { ...file, fileType, path, };
+        })
+      );
+      return filesWithPathsAndTypes;
     }
     catch (error) {
       console.error('Error fetching files:', error);
@@ -100,6 +109,10 @@ export class GoogleDriveService {
       return 'PDF';
     } else if (mimeType.startsWith('application/x-zip-compressed')){
       return 'ZIP';
+    } else if (mimeType.startsWith('application/vnd.openxmlformats-officedocument.presentationml.presentation')){
+      return 'Microsoft PowerPoint';
+    } else if (mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'){
+      return 'Microsoft Excel';
     } else {
       return 'File'; 
     }
