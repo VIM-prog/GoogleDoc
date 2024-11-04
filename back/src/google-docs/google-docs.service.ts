@@ -19,7 +19,11 @@ export class GoogleDriveService {
 
       const auth = new google.auth.GoogleAuth({
         credentials: credentials,
-        scopes: ['https://www.googleapis.com/auth/drive.readonly'],
+        scopes: [
+          'https://www.googleapis.com/auth/drive',
+          'https://www.googleapis.com/auth/drive.file',
+          'https://www.googleapis.com/auth/drive.resource'
+      ],
       });
 
       this.drive = google.drive({ version: 'v3', auth });
@@ -91,8 +95,39 @@ export class GoogleDriveService {
       return filesWithPathsAndTypes;
     }
     catch (error) {
-      console.error('Error fetching files:', error);
+      console.error('Ошибка получения файла по email:', error);
       throw error; 
+    }
+  }
+  //Удаление по email доступа ко всем документам
+  async deleteAllAccess(email: string) {
+    const searchEmail = email.toLowerCase(); 
+    try {
+      const files = await this.getFilesSharedWithEmail(email);
+      for (const file of files) {
+        try {
+          const permissions = await this.drive.permissions.list({
+            fileId: file.id,
+            fields: 'permissions(id, emailAddress, role)',
+          });
+          const permissionsList = permissions.data.permissions;
+
+          const permission = permissionsList.find(p => p.emailAddress.toLowerCase() === searchEmail);
+          if (permission) {
+            await this.drive.permissions.delete({
+              fileId: file.id,
+              permissionId: permission.id,
+            });
+          } else {
+            console.log(`Разрешение для файла - ${file.name} - не найдено`);
+          }
+        } catch (err) {
+          console.error(`Ошибка при удалении доступа к файлу ${file.name}:`, err);
+        }
+      }
+    } catch (error) {
+      console.error('Ошибка удаления доступа:', error);
+      throw error;
     }
   }
   //Тип файла 

@@ -1,4 +1,4 @@
-import { Controller, Get, Param } from '@nestjs/common';
+import { Controller, Delete, Get, Param } from '@nestjs/common';
 import { GoogleDriveService } from './google-docs.service';
 
 @Controller('google-drive')
@@ -14,5 +14,11 @@ export class GoogleDriveController {
   @Get('documents/:email')
   async getFiles(@Param('email') email: string) {
     return this.googleDriveService.getFilesSharedWithEmail(email);
+  }
+
+  @Delete('documents/access/:email')
+  async deleteAllAccess(@Param('email') email: string) {
+    await this.googleDriveService.deleteAllAccess(email);
+    return { message: 'Доступ удален' };
   }
 }
