@@ -19,12 +19,12 @@ export class GoogleDriveController {
 
   @Get('documents/:driveId/:email')
   async getFiles(
-    @Param('driveId') driveId: string, @Param('email') email: string,) {
-    return this.googleDriveService.getFilesSharedWithEmail(email, driveId);
+    @Param('email') email: string,@Param('driveId') driveId: string,) {
+    return this.googleDriveService.getFilesSharedWithEmail(driveId, email);
   }
 
   /*@Delete('documents/access/:driveId/:email')
-    async deleteOneAccess(@Param('driveId') driveId: string, @Param('email') email: string) {
+    async deleteAllAccess(@Param('email') email: string, @Param('driveId') driveId: string) {
       await this.googleDriveService.deleteAllAccess(driveId, email);
       return { message: 'Доступ удален' };
   }

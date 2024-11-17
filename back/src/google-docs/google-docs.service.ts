@@ -64,6 +64,31 @@ export class GoogleDriveService {
     }
   }
 
+  //Путь к файлу
+  private async buildFilePath(file: drive_v3.Schema$File) {
+    let path = file.name;
+    let parentId = file.parents ? file.parents[0] : null;
+    try {
+      while (parentId) {
+        const parent = await this.drive.files.get({
+          fileId: parentId,
+          supportsAllDrives: true,
+          fields: 'id, name, parents',
+        });
+
+        if (parent.data.name) {
+          path = `${parent.data.name}/${path}`;
+        }
+
+        parentId = parent.data.parents ? parent.data.parents[0] : null;
+      }
+      return path;
+    }
+    catch {
+      return null
+    }
+  }
+
   //Загрузка документов с диска
   async getFilesFromDrive(driveId: string) {
     try {
@@ -72,7 +97,8 @@ export class GoogleDriveService {
         corpora: 'drive',
         includeItemsFromAllDrives: true,
         supportsAllDrives: true,
-        fields: 'nextPageToken, files(id, name, mimeType)',
+        fields: 'nextPageToken, files(id, name, parents, mimeType)',
+        q: 'trashed = false'
       });
 
       const files = response.data.files;
@@ -84,9 +110,10 @@ export class GoogleDriveService {
 
       const filesWithPathsAndTypes = await Promise.all(
         files.map(async (file) => {
+          const path = await this.buildFilePath(file);
           const fileType = this.getFileType(file.mimeType);
-          return { ...file, fileType };
-        }),
+          return { ...file, fileType, path, };
+        })
       );
       return filesWithPathsAndTypes;
     } catch (error) {
@@ -99,7 +126,7 @@ export class GoogleDriveService {
   }
 
   //Получение файлов по email
-  async getFilesSharedWithEmail(email: string, driveId: string) {
+  async getFilesSharedWithEmail(driveId: string, email: string) {
     try {
       const res = await this.drive.files.list({
         driveId: driveId,
@@ -113,9 +140,10 @@ export class GoogleDriveService {
 
       const filesWithPathsAndTypes = await Promise.all(
         files.map(async (file) => {
+          const path = await this.buildFilePath(file);
           const fileType = this.getFileType(file.mimeType);
-          return { ...file, fileType };
-        }),
+          return { ...file, fileType, path, };
+        })
       );
       return filesWithPathsAndTypes;
     } catch (error) {
@@ -123,6 +151,9 @@ export class GoogleDriveService {
       throw error;
     }
   }
+
+  //Удаление доступа к файлам по email
+
 
   //Тип файла
   private getFileType(mimeType: string): string {
