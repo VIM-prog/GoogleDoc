@@ -23,27 +23,15 @@ export class GoogleDriveController {
     return this.googleDriveService.getFilesSharedWithEmail(driveId, email);
   }
 
-  /*@Delete('documents/access/:driveId/:email')
-    async deleteAllAccess(@Param('email') email: string, @Param('driveId') driveId: string) {
+  @Delete('documents/access/:driveId/:email')
+    async  deleteAllAccess(@Param('driveId') driveId: string, @Param('email') email: string,) {
       await this.googleDriveService.deleteAllAccess(driveId, email);
       return { message: 'Доступ удален' };
   }
 
-  /*@Delete('document/access/:email/:fileId')
+  @Delete('document/access/:email/:fileId')
   async deleteAccess(@Param('email') email: string, @Param('fileId') fileId: string,) {
-    await this.googleDriveService.deleteAccessByEmailAndFileId(email, fileId);
+    await this.googleDriveService.deleteOneAccess(email, fileId);
     return { message: 'Доступ удален' };
-  }*/
-
-  /*
-    @Get('document/:fileId')
-    async getDocument(@Param('fileId') fileId: string) {
-      return this.googleDriveService.getFileById(fileId);
-    }
-  
-    @Get('documents/:email')
-    async getFiles(@Param('email') email: string) {
-      return this.googleDriveService.getFilesSharedWithEmail(email);
-    }
-    */
+  }
 }

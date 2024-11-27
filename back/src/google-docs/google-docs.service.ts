@@ -40,6 +40,7 @@ export class GoogleDriveService {
     }
   }
 
+
   //Получение диска
   async listDrives() {
     try {
@@ -134,7 +135,7 @@ export class GoogleDriveService {
         includeItemsFromAllDrives: true,
         supportsAllDrives: true,
         q: `'${email}' in writers or '${email}' in readers`,
-        fields: 'nextPageToken, files(id, name, mimeType)',
+        fields: 'nextPageToken, files(id, name, parents, mimeType)',
       });
       const files = res.data.files;
 
@@ -152,8 +153,74 @@ export class GoogleDriveService {
     }
   }
 
-  //Удаление доступа к файлам по email
+  //Удаление доступа к одному файлу
+  async deleteOneAccess(email: string, fileId: string) {
+    const searchEmail = email.toLowerCase();
+    try {
+      const permissions = await this.drive.permissions.list({
+        fileId: fileId,
+        fields: 'permissions(id, emailAddress, role)',
+        supportsAllDrives: true
+      });
+      const permissionsList = permissions.data.permissions;
 
+      const permission = permissionsList.find(
+        (p) => p.emailAddress.toLowerCase() === searchEmail,
+      );
+      if (permission) {
+        try {
+          await this.drive.permissions.delete({
+            fileId: fileId,
+            permissionId: permission.id,
+            supportsAllDrives: true
+          });
+        } catch (err) {
+          console.error(
+            `Ошибка при удалении доступа к файлу - ${fileId}:`,
+            err,
+          );
+        }
+      } else {
+        console.log(`Разрешение для файла не найдено`);
+      }
+    } catch (error) {
+      console.error('Ошибка получения разрешений:', error);
+      throw error;
+    }
+  }
+
+  async deleteAllAccess(driveId: string, email: string) {
+    const searchEmail = email.toLowerCase();
+    try {
+      const files = await this.getFilesSharedWithEmail(driveId, email);
+      for (const file of files) {
+        try {
+          const permissions = await this.drive.permissions.list({
+            fileId: file.id,
+            fields: 'permissions(id, emailAddress, role)',
+            supportsAllDrives: true
+          });
+          const permissionsList = permissions.data.permissions;
+
+          const permission = permissionsList.find(p => p.emailAddress.toLowerCase() === searchEmail);
+          if (permission) {
+            await this.drive.permissions.delete({
+              fileId: file.id,
+              permissionId: permission.id,
+              supportsAllDrives: true
+            });
+          } else {
+            console.log(`Разрешение для файла - ${file.name} - не найдено`);
+          }
+        } catch (err) {
+          console.error(`Ошибка при удалении доступа к файлу ${file.name}:`, err);
+        }
+      }
+    } catch (error) {
+      console.error('Ошибка удаления доступа:', error);
+      throw error;
+    }
+  }
 
   //Тип файла
   private getFileType(mimeType: string): string {
