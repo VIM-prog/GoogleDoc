@@ -6,18 +6,13 @@ import { drive_v3, google } from 'googleapis';
 export class GoogleDriveService {
   private readonly logger = new Logger(GoogleDriveService.name);
   private drive: drive_v3.Drive;
-
   constructor(private configService: ConfigService) {
     const serviceAccountKey = this.configService.get<string>(
       'GOOGLE_SERVICE_ACCOUNT_KEY',
     );
-
     if (!serviceAccountKey || typeof serviceAccountKey !== 'string') {
-      throw new Error(
-        'GOOGLE_SERVICE_ACCOUNT_KEY не был инициализирован или его тип не верен',
-      );
+      throw new Error('ключ не был инициализирован или его тип не верен');
     }
-
     try {
       const credentials = JSON.parse(serviceAccountKey);
 
@@ -40,8 +35,7 @@ export class GoogleDriveService {
     }
   }
 
-
-  //Получение диска
+  //Получение дисков
   async listDrives() {
     try {
       const response = await this.drive.drives.list({
@@ -84,9 +78,8 @@ export class GoogleDriveService {
         parentId = parent.data.parents ? parent.data.parents[0] : null;
       }
       return path;
-    }
-    catch {
-      return null
+    } catch {
+      return null;
     }
   }
 
@@ -99,7 +92,7 @@ export class GoogleDriveService {
         includeItemsFromAllDrives: true,
         supportsAllDrives: true,
         fields: 'nextPageToken, files(id, name, parents, mimeType)',
-        q: 'trashed = false'
+        q: 'trashed = false',
       });
 
       const files = response.data.files;
@@ -109,14 +102,13 @@ export class GoogleDriveService {
         return [];
       }
 
-      const filesWithPathsAndTypes = await Promise.all(
+      return await Promise.all(
         files.map(async (file) => {
           const path = await this.buildFilePath(file);
           const fileType = this.getFileType(file.mimeType);
-          return { ...file, fileType, path, };
-        })
+          return { ...file, fileType, path };
+        }),
       );
-      return filesWithPathsAndTypes;
     } catch (error) {
       this.logger.error(
         `Ошибка при загрузке файлов с диска ${driveId}: ${error.message}`,
@@ -139,14 +131,13 @@ export class GoogleDriveService {
       });
       const files = res.data.files;
 
-      const filesWithPathsAndTypes = await Promise.all(
+      return await Promise.all(
         files.map(async (file) => {
           const path = await this.buildFilePath(file);
           const fileType = this.getFileType(file.mimeType);
-          return { ...file, fileType, path, };
-        })
+          return { ...file, fileType, path };
+        }),
       );
-      return filesWithPathsAndTypes;
     } catch (error) {
       console.error('Ошибка получения файла по email:', error);
       throw error;
@@ -160,7 +151,7 @@ export class GoogleDriveService {
       const permissions = await this.drive.permissions.list({
         fileId: fileId,
         fields: 'permissions(id, emailAddress, role)',
-        supportsAllDrives: true
+        supportsAllDrives: true,
       });
       const permissionsList = permissions.data.permissions;
 
@@ -172,7 +163,7 @@ export class GoogleDriveService {
           await this.drive.permissions.delete({
             fileId: fileId,
             permissionId: permission.id,
-            supportsAllDrives: true
+            supportsAllDrives: true,
           });
         } catch (err) {
           console.error(
@@ -189,6 +180,7 @@ export class GoogleDriveService {
     }
   }
 
+  //Удаление доступа ко всем файлам и диску
   async deleteAllAccess(driveId: string, email: string) {
     const searchEmail = email.toLowerCase();
     try {
@@ -198,22 +190,27 @@ export class GoogleDriveService {
           const permissions = await this.drive.permissions.list({
             fileId: file.id,
             fields: 'permissions(id, emailAddress, role)',
-            supportsAllDrives: true
+            supportsAllDrives: true,
           });
           const permissionsList = permissions.data.permissions;
 
-          const permission = permissionsList.find(p => p.emailAddress.toLowerCase() === searchEmail);
+          const permission = permissionsList.find(
+            (p) => p.emailAddress.toLowerCase() === searchEmail,
+          );
           if (permission) {
             await this.drive.permissions.delete({
               fileId: file.id,
               permissionId: permission.id,
-              supportsAllDrives: true
+              supportsAllDrives: true,
             });
           } else {
             console.log(`Разрешение для файла - ${file.name} - не найдено`);
           }
         } catch (err) {
-          console.error(`Ошибка при удалении доступа к файлу ${file.name}:`, err);
+          console.error(
+            `Ошибка при удалении доступа к файлу ${file.name}:`,
+            err,
+          );
         }
       }
     } catch (error) {

@@ -1,15 +1,15 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { GoogleDocsController } from './google-docs.controller';
+import { GoogleDriveController } from './google-docs.controller';
 
 describe('GoogleDocsController', () => {
-  let controller: GoogleDocsController;
+  let controller: GoogleDriveController;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      controllers: [GoogleDocsController],
+      controllers: [GoogleDriveController],
     }).compile();
 
-    controller = module.get<GoogleDocsController>(GoogleDocsController);
+    controller = module.get<GoogleDriveController>(GoogleDriveController);
   });
 
   it('should be defined', () => {
