@@ -1,29 +1,62 @@
 import { NestFactory } from '@nestjs/core';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { WinstonModule } from 'nest-winston';
+import { format, transports } from 'winston';
+import { ValidationPipe } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-
-  const config = new DocumentBuilder()
-    .setTitle('Google drive api')
-    .setDescription('Actions with drive api')
-    .setVersion('1.0')
-    .build();
-
-  const document = SwaggerModule.createDocument(app, config);
-  
-  SwaggerModule.setup('swagger', app, document, {
-    swaggerOptions: {
-      tagsSorter: 'alpha',
-      operationsSorter: 'alpha', 
-      docExpansion: 'none', 
-      filter: true, 
-      showRequestDuration: true, 
-    },
+  const app = await NestFactory.create(AppModule, {
+    logger: WinstonModule.createLogger({
+      transports: [
+        new transports.File({
+          filename: `logs/error.log`,
+          level: 'error',
+          format: format.combine(format.timestamp(), format.json()),
+        }),
+        new transports.File({
+          filename: `logs/error.log`,
+          format: format.combine(format.timestamp(), format.json()),
+        }),
+        new transports.Console({
+          format: format.combine(
+            format.cli(),
+            format.splat(),
+            format.timestamp(),
+            format.printf((info) => {
+              return `${info.timestamp} ${info.level}: ${info.message}`;
+            }),
+          ),
+        }),
+      ],
+    }),
   });
+  const config = new DocumentBuilder()
+    .setTitle('Drive Access')
+    .setDescription('The drive API')
+    .setVersion('2.0')
+    .build();
+  const documentFactory = () => SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api', app, documentFactory);
+  app.useGlobalPipes(
+    new ValidationPipe({
+      transform: true,
+      whitelist: true,
+    }),
+  );
+  const configService = app.get(ConfigService);
+  const nodeEnv = configService.get<string>('NODE_ENV');
+  const host = configService.get<string>('HOST');
+  const port = configService.get<number>('PORT');
 
-
-  await app.listen(process.env.PORT ?? 3000);
+  if (nodeEnv === 'development') {
+    app.enableCors({
+      origin: host,
+      methods: ['GET', 'POST'],
+      credentials: true,
+    });
+    await app.listen(process.env.PORT ?? port);
+  }
 }
 bootstrap();

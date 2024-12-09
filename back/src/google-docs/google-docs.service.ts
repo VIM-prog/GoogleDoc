@@ -1,21 +1,18 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { drive_v3, google } from 'googleapis';
 
 @Injectable()
 export class GoogleDriveService {
-  private readonly logger = new Logger(GoogleDriveService.name);
   private drive: drive_v3.Drive;
+  private readonly logger = new Logger(GoogleDriveService.name);
   constructor(private configService: ConfigService) {
-    const serviceAccountKey = this.configService.get<string>(
-      'GOOGLE_SERVICE_ACCOUNT_KEY',
-    );
-    if (!serviceAccountKey || typeof serviceAccountKey !== 'string') {
-      throw new Error('ключ не был инициализирован или его тип не верен');
+    const key = this.configService.get<string>('KEY');
+    if (!key) {
+      throw new Error('ключ не был инициализирован');
     }
     try {
-      const credentials = JSON.parse(serviceAccountKey);
-
+      const credentials = JSON.parse(key);
       const auth = new google.auth.GoogleAuth({
         credentials: credentials,
         scopes: [
@@ -24,42 +21,38 @@ export class GoogleDriveService {
           'https://www.googleapis.com/auth/drive.resource',
         ],
       });
-
       this.drive = google.drive({ version: 'v3', auth });
     } catch (error) {
       this.logger.error(
         `Провал загрузки Google Drive service: ${error.message}`,
-        error.stack,
       );
-      throw new Error('Провал загрузки');
     }
   }
 
-  //Получение дисков
+  /**
+   * Получение дисков
+   */
   async listDrives() {
     try {
-      const response = await this.drive.drives.list({
-        fields: 'nextPageToken, drives(id, name)',
+      const res = await this.drive.drives.list({
+        fields: 'drives(id, name)',
       });
-
-      const drives = response.data.drives;
-
+      const drives = res.data.drives;
       if (!drives || drives.length === 0) {
-        this.logger.log('Нет доступных дисков.');
+        this.logger.log('Нет доступных дисков');
         return [];
       }
-
       return drives;
     } catch (error) {
-      this.logger.error(
-        `Провал загрузки дисков: ${error.message}`,
-        error.stack,
-      );
-      throw new Error('Ошибка при загрузке дисков');
+      this.logger.error(`Провал загрузки дисков: ${error.message}`);
     }
   }
 
-  //Путь к файлу
+  /**
+   * Строительство пути
+   * @param file - файл, к которому строится путь
+   * @private - используется только внутри сервиса
+   */
   private async buildFilePath(file: drive_v3.Schema$File) {
     let path = file.name;
     let parentId = file.parents ? file.parents[0] : null;
@@ -70,11 +63,9 @@ export class GoogleDriveService {
           supportsAllDrives: true,
           fields: 'id, name, parents',
         });
-
         if (parent.data.name) {
           path = `${parent.data.name}/${path}`;
         }
-
         parentId = parent.data.parents ? parent.data.parents[0] : null;
       }
       return path;
@@ -83,25 +74,30 @@ export class GoogleDriveService {
     }
   }
 
-  //Загрузка документов с диска
-  async getFilesFromDrive(driveId: string) {
+  /**
+   * Получение файлов с конкретного диска
+   * @param driveId - id диска
+   */
+  async getFiles(driveId?: string) {
     try {
-      const response = await this.drive.files.list({
-        driveId: driveId,
-        corpora: 'drive',
+      const params: any = {
         includeItemsFromAllDrives: true,
         supportsAllDrives: true,
+        q: `trashed = false`,
         fields: 'nextPageToken, files(id, name, parents, mimeType)',
-        q: 'trashed = false',
-      });
-
-      const files = response.data.files;
-
+      };
+      if (driveId) {
+        params.driveId = driveId;
+        params.corpora = 'drive';
+      } else {
+        params.corpora = 'allDrives';
+      }
+      const res = await this.drive.files.list(params);
+      const files = res.data.files;
       if (!files || files.length === 0) {
         this.logger.log(`На диске ${driveId} нет файлов.`);
         return [];
       }
-
       return await Promise.all(
         files.map(async (file) => {
           const path = await this.buildFilePath(file);
@@ -112,25 +108,31 @@ export class GoogleDriveService {
     } catch (error) {
       this.logger.error(
         `Ошибка при загрузке файлов с диска ${driveId}: ${error.message}`,
-        error.stack,
       );
-      throw new Error(`Ошибка при загрузке файлов с диска ${driveId}`);
     }
   }
 
-  //Получение файлов по email
-  async getFilesSharedWithEmail(driveId: string, email: string) {
+  /**
+   * Получение файлов, к которым имеет доступ пользователь
+   * @param email
+   * @param driveId
+   */
+  async getFilesSharedWithEmail(email: string, driveId?: string) {
     try {
-      const res = await this.drive.files.list({
-        driveId: driveId,
-        corpora: 'drive',
+      const params: any = {
         includeItemsFromAllDrives: true,
         supportsAllDrives: true,
-        q: `'${email}' in writers or '${email}' in readers`,
+        q: `'${email}' in readers and trashed = false`,
         fields: 'nextPageToken, files(id, name, parents, mimeType)',
-      });
+      };
+      if (driveId) {
+        params.driveId = driveId;
+        params.corpora = 'drive';
+      } else {
+        params.corpora = 'allDrives';
+      }
+      const res = await this.drive.files.list(params);
       const files = res.data.files;
-
       return await Promise.all(
         files.map(async (file) => {
           const path = await this.buildFilePath(file);
@@ -139,113 +141,102 @@ export class GoogleDriveService {
         }),
       );
     } catch (error) {
-      console.error('Ошибка получения файла по email:', error);
-      throw error;
+      this.logger.error(`Ошибка получения файлов по email:' ${error.message}`);
     }
   }
 
-  //Удаление доступа к одному файлу
+  /**
+   * Удаление доступа к одному файлу
+   * @param email - email пользователя
+   * @param fileId - id файла, к которому мы хотим удалить доступ
+   * @private
+   */
   async deleteOneAccess(email: string, fileId: string) {
     const searchEmail = email.toLowerCase();
-    try {
-      const permissions = await this.drive.permissions.list({
-        fileId: fileId,
-        fields: 'permissions(id, emailAddress, role)',
-        supportsAllDrives: true,
-      });
-      const permissionsList = permissions.data.permissions;
-
-      const permission = permissionsList.find(
-        (p) => p.emailAddress.toLowerCase() === searchEmail,
-      );
-      if (permission) {
-        try {
-          await this.drive.permissions.delete({
-            fileId: fileId,
-            permissionId: permission.id,
-            supportsAllDrives: true,
-          });
-        } catch (err) {
-          console.error(
-            `Ошибка при удалении доступа к файлу - ${fileId}:`,
-            err,
-          );
-        }
-      } else {
-        console.log(`Разрешение для файла не найдено`);
+    const perms = await this.drive.permissions.list({
+      fileId: fileId,
+      fields: 'permissions(id, emailAddress, role)',
+      supportsAllDrives: true,
+    });
+    const permissionsList = perms.data.permissions;
+    const perm = permissionsList.find(
+      (p) => p.emailAddress.toLowerCase() === searchEmail,
+    );
+    if (perm) {
+      try {
+        await this.drive.permissions.delete({
+          fileId: fileId,
+          permissionId: perm.id,
+          supportsAllDrives: true,
+        });
+      } catch (error) {
+        throw new BadRequestException(`${error.message}`);
       }
-    } catch (error) {
-      console.error('Ошибка получения разрешений:', error);
-      throw error;
     }
   }
 
-  //Удаление доступа ко всем файлам и диску
-  async deleteAllAccess(driveId: string, email: string) {
-    const searchEmail = email.toLowerCase();
+  /**
+   * Удаление доступа к диску и файлам, которые находятся на нем
+   * @param driveId - id диска, к которому хотим удалить доступ
+   * @param email - email пользователя
+   */
+  async deleteAccessDisk(driveId: string, email: string) {
     try {
-      const files = await this.getFilesSharedWithEmail(driveId, email);
+      await this.deleteOneAccess(email, driveId);
+    } catch (error) {
+      this.logger.error(`Ошибка удаления доступа к диску: ${error.message}`);
+    }
+  }
+
+  /**
+   * Удаления пользователя ко всем файлам и дискам
+   * @param email - email пользователя
+   */
+  async deleteAccessAllDisks(email: string) {
+    try {
+      const drives = await this.listDrives();
+      for (const drive of drives) {
+        await this.deleteOneAccess(email, drive.id);
+      }
+      const files = await this.getFilesSharedWithEmail(email);
       for (const file of files) {
-        try {
-          const permissions = await this.drive.permissions.list({
-            fileId: file.id,
-            fields: 'permissions(id, emailAddress, role)',
-            supportsAllDrives: true,
-          });
-          const permissionsList = permissions.data.permissions;
-
-          const permission = permissionsList.find(
-            (p) => p.emailAddress.toLowerCase() === searchEmail,
-          );
-          if (permission) {
-            await this.drive.permissions.delete({
-              fileId: file.id,
-              permissionId: permission.id,
-              supportsAllDrives: true,
-            });
-          } else {
-            console.log(`Разрешение для файла - ${file.name} - не найдено`);
-          }
-        } catch (err) {
-          console.error(
-            `Ошибка при удалении доступа к файлу ${file.name}:`,
-            err,
-          );
-        }
+        await this.deleteOneAccess(email, file.id);
       }
     } catch (error) {
-      console.error('Ошибка удаления доступа:', error);
-      throw error;
+      this.logger.error(`Ошибка удаления доступа: ${error.message}`);
     }
   }
-
-  //Тип файла
+  /**
+   * Преобразование гугл типа файла в более привычный
+   * @param mimeType - гугл тип файла
+   * @private - используется только внутри сервиса
+   */
   private getFileType(mimeType: string): string {
     if (mimeType === 'application/vnd.google-apps.folder') {
-      return 'Folder';
+      return 'folder';
     } else if (mimeType.startsWith('application/vnd.google-apps')) {
-      return 'Google Document';
+      return 'document';
     } else if (mimeType.startsWith('image/')) {
-      return 'Image';
+      return 'image';
     } else if (mimeType.startsWith('video/')) {
-      return 'Video';
+      return 'video';
     } else if (mimeType.startsWith('application/pdf')) {
-      return 'PDF';
+      return 'pdf';
     } else if (mimeType.startsWith('application/x-zip-compressed')) {
-      return 'ZIP';
+      return 'zip';
     } else if (
       mimeType.startsWith(
         'application/vnd.openxmlformats-officedocument.presentationml.presentation',
       )
     ) {
-      return 'Microsoft PowerPoint';
+      return 'powerpoint';
     } else if (
       mimeType ===
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     ) {
-      return 'Microsoft Excel';
+      return 'excel';
     } else {
-      return 'File';
+      return 'file';
     }
   }
 }
