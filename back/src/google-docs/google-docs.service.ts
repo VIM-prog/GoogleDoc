@@ -48,6 +48,27 @@ export class GoogleDriveService {
     }
   }
 
+  async listDriveEmail(email: string) {
+    const listDrive = [];
+    const searchEmail = email.toLowerCase();
+    const drives = await this.listDrives();
+    for (const drive of drives) {
+      const perms = await this.drive.permissions.list({
+        fileId: drive.id,
+        fields: 'permissions(id, emailAddress, role)',
+        supportsAllDrives: true,
+      });
+      const permissionsList = perms.data.permissions;
+      const perm = permissionsList.find(
+        (p) => p.emailAddress.toLowerCase() === searchEmail,
+      );
+      if (perm) {
+        listDrive.concat(drive.id);
+      }
+    }
+    return listDrive;
+  }
+
   /**
    * Строительство пути
    * @param file - файл, к которому строится путь

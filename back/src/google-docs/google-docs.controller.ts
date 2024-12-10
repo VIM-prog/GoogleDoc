@@ -112,6 +112,16 @@ export class GoogleDriveController {
     return this.googleDriveService.getFilesSharedWithEmail(dto.email);
   }
 
+  @Get('drive/:email')
+  @ApiParam({
+    name: 'email',
+    description:
+      'Введите email, чтобы посмотреть, к каким файлам он имеет доступ',
+  })
+  async getDisk(@Param() dto: GoogleSearchEmailDto) {
+    return this.googleDriveService.listDriveEmail(dto.email);
+  }
+
   @Get('documents/:email/:driveId')
   @ApiOperation({
     summary: 'Получить список документов другого пользователя на диске',
