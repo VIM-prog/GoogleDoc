@@ -31,7 +31,7 @@ export class GoogleDriveController {
 
   @Get('documents')
   @ApiOperation({
-    summary: 'Получить документов',
+    summary: 'Получить документы',
     description: 'Возвращает список всех документов, которые доступны вам',
   })
   @ApiResponse({
