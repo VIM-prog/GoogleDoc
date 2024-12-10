@@ -79,12 +79,16 @@ export class GoogleDriveService {
    * @param driveId - id диска
    */
   async getFiles(driveId?: string) {
-    try {
+    let nextPageToken: string;
+    let allFiles = [];
+    do {
       const params: any = {
         includeItemsFromAllDrives: true,
         supportsAllDrives: true,
         q: `trashed = false`,
+        pageToken: nextPageToken || null,
         fields: 'nextPageToken, files(id, name, parents, mimeType)',
+        pageSize: 200,
       };
       if (driveId) {
         params.driveId = driveId;
@@ -94,22 +98,22 @@ export class GoogleDriveService {
       }
       const res = await this.drive.files.list(params);
       const files = res.data.files;
+      console.log(files.length);
       if (!files || files.length === 0) {
         this.logger.log(`На диске ${driveId} нет файлов.`);
         return [];
       }
-      return await Promise.all(
+      const processedFiles = await Promise.all(
         files.map(async (file) => {
           const path = await this.buildFilePath(file);
           const fileType = this.getFileType(file.mimeType);
           return { ...file, fileType, path };
         }),
       );
-    } catch (error) {
-      this.logger.error(
-        `Ошибка при загрузке файлов с диска ${driveId}: ${error.message}`,
-      );
-    }
+      nextPageToken = res.data.nextPageToken;
+      allFiles = allFiles.concat(processedFiles);
+    } while (nextPageToken);
+    return allFiles;
   }
 
   /**
@@ -118,10 +122,13 @@ export class GoogleDriveService {
    * @param driveId
    */
   async getFilesSharedWithEmail(email: string, driveId?: string) {
-    try {
+    let nextPageToken: string;
+    let allFiles = [];
+    do {
       const params: any = {
         includeItemsFromAllDrives: true,
         supportsAllDrives: true,
+        pageToken: nextPageToken || null,
         q: `'${email}' in readers and trashed = false`,
         fields: 'nextPageToken, files(id, name, parents, mimeType)',
       };
@@ -133,20 +140,21 @@ export class GoogleDriveService {
       }
       const res = await this.drive.files.list(params);
       const files = res.data.files;
-      return await Promise.all(
+      const processedFiles = await Promise.all(
         files.map(async (file) => {
           const path = await this.buildFilePath(file);
           const fileType = this.getFileType(file.mimeType);
           return { ...file, fileType, path };
         }),
       );
-    } catch (error) {
-      this.logger.error(`Ошибка получения файлов по email:' ${error.message}`);
-    }
+      nextPageToken = res.data.nextPageToken;
+      allFiles = allFiles.concat(processedFiles);
+    } while (nextPageToken);
+    return allFiles;
   }
 
   /**
-   * Удаление доступа к одному файлу
+   * Удаление доступа к одному файлу (Работает только если не имеет доступ к диску или родительскому элементу)
    * @param email - email пользователя
    * @param fileId - id файла, к которому мы хотим удалить доступ
    * @private

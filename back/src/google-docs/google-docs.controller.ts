@@ -50,7 +50,6 @@ export class GoogleDriveController {
     return await this.googleDriveService.getFiles();
   }
 
-  @Get(':driveId/documents')
   @ApiOperation({
     summary: 'Получить список документов на диске',
     description:
@@ -59,6 +58,7 @@ export class GoogleDriveController {
   @ApiResponse({
     status: 200,
     description: 'Возвращение списка документов',
+    //type: GoogleSearchDto,
   })
   @ApiResponse({
     status: 401,
@@ -72,9 +72,18 @@ export class GoogleDriveController {
     name: 'driveId',
     description: 'Введите id диска, чтобы просмотреть файлы на этом диске',
   })
+  @Get(':driveId/documents')
   async getDocDrives(@Param() dto: GoogleSearchDto) {
     return await this.googleDriveService.getFiles(dto.driveId);
   }
+
+  // getData() {
+  //   return {
+  //     drives: this.googleDriveService.getDisks(dto.driveId),
+  //     files: this.googleDriveService.getFiles(dto.driveId),
+  //   }
+  // }
+  //
 
   @Get('documents/:email')
   @ApiOperation({

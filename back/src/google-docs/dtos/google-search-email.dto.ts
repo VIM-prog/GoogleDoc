@@ -5,8 +5,8 @@ export class GoogleSearchEmailDto {
   email: string;
   @IsOptional()
   @IsString()
-  driveId: string;
+  driveId?: string;
   @IsOptional()
   @IsString()
-  fileId: string;
+  fileId?: string;
 }

@@ -10,22 +10,12 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     logger: WinstonModule.createLogger({
       transports: [
-        new transports.File({
-          filename: `logs/error.log`,
-          level: 'error',
-          format: format.combine(format.timestamp(), format.json()),
-        }),
-        new transports.File({
-          filename: `logs/error.log`,
-          format: format.combine(format.timestamp(), format.json()),
-        }),
         new transports.Console({
           format: format.combine(
             format.cli(),
-            format.splat(),
             format.timestamp(),
             format.printf((info) => {
-              return `${info.timestamp} ${info.level}: ${info.message}`;
+              return `${info.level}: ${info.timestamp}${info.message}`;
             }),
           ),
         }),
@@ -46,9 +36,9 @@ async function bootstrap() {
     }),
   );
   const configService = app.get(ConfigService);
-  const nodeEnv = configService.get<string>('NODE_ENV');
-  const host = configService.get<string>('HOST');
-  const port = configService.get<number>('PORT');
+  const nodeEnv = configService.get<string>('NODE_ENV') || 'development';
+  const host = configService.get<string>('HOST') || 'localhost:3000';
+  const port = configService.get<number>('PORT') || 4000;
 
   if (nodeEnv === 'development') {
     app.enableCors({
@@ -56,7 +46,7 @@ async function bootstrap() {
       methods: ['GET', 'POST'],
       credentials: true,
     });
-    await app.listen(process.env.PORT ?? port);
+    await app.listen(port);
   }
 }
 bootstrap();
