@@ -1,8 +1,7 @@
 import { Controller, Delete, Get, Param } from '@nestjs/common';
 import { GoogleDriveService } from './google-docs.service';
-import { GoogleSearchEmailDto } from './dtos/google-search-email.dto';
+import { GoogleSearchEmailDto } from './dto/google-search-email.dto';
 import { ApiOperation, ApiParam, ApiResponse } from '@nestjs/swagger';
-import { GoogleSearchDto } from './dtos/google-search.dto';
 
 @Controller('google-drive')
 export class GoogleDriveController {
@@ -50,41 +49,6 @@ export class GoogleDriveController {
     return await this.googleDriveService.getFiles();
   }
 
-  @ApiOperation({
-    summary: 'Получить список документов на диске',
-    description:
-      'Возвращает список всех документов по определенному диску, которые доступны вам',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Возвращение списка документов',
-    //type: GoogleSearchDto,
-  })
-  @ApiResponse({
-    status: 401,
-    description: 'Ошибка аутентификации',
-  })
-  @ApiResponse({
-    status: 500,
-    description: 'Внутренняя ошибка сервера',
-  })
-  @ApiParam({
-    name: 'driveId',
-    description: 'Введите id диска, чтобы просмотреть файлы на этом диске',
-  })
-  @Get(':driveId/documents')
-  async getDocDrives(@Param() dto: GoogleSearchDto) {
-    return await this.googleDriveService.getFiles(dto.driveId);
-  }
-
-  // getData() {
-  //   return {
-  //     drives: this.googleDriveService.getDisks(dto.driveId),
-  //     files: this.googleDriveService.getFiles(dto.driveId),
-  //   }
-  // }
-  //
-
   @Get('documents/:email')
   @ApiOperation({
     summary: 'Получить список документов другого пользователя',
@@ -109,7 +73,7 @@ export class GoogleDriveController {
       'Введите email, чтобы посмотреть, к каким файлам он имеет доступ',
   })
   async getAllFiles(@Param() dto: GoogleSearchEmailDto) {
-    return this.googleDriveService.getFilesSharedWithEmail(dto.email);
+    return this.googleDriveService.getFiles(dto.email);
   }
 
   @Get('drive/:email')
@@ -119,7 +83,7 @@ export class GoogleDriveController {
       'Введите email, чтобы посмотреть, к каким файлам он имеет доступ',
   })
   async getDisk(@Param() dto: GoogleSearchEmailDto) {
-    return this.googleDriveService.listDriveEmail(dto.email);
+    return this.googleDriveService.listDrives(dto.email);
   }
 
   @Get('documents/:email/:driveId')
@@ -128,34 +92,6 @@ export class GoogleDriveController {
     description:
       'Возвращает список всех документов которые доступны другому пользователю на определенном диске',
   })
-  @ApiResponse({
-    status: 200,
-    description: 'Возвращение списка документов',
-  })
-  @ApiResponse({
-    status: 401,
-    description: 'Ошибка аутентификации',
-  })
-  @ApiResponse({
-    status: 500,
-    description: 'Внутренняя ошибка сервера',
-  })
-  @ApiParam({
-    name: 'email',
-    description:
-      'Введите email, чтобы посмотреть, к каким файлам он имеет доступ',
-  })
-  @ApiParam({
-    name: 'driveId',
-    description: 'Введите id диска, чтобы сузить поиск',
-  })
-  async getFiles(@Param() dto: GoogleSearchEmailDto) {
-    return this.googleDriveService.getFilesSharedWithEmail(
-      dto.email,
-      dto.driveId,
-    );
-  }
-
   @Delete('document/access/:email/:fileId')
   @ApiOperation({
     summary: 'Удаление доступа к файлу',
@@ -220,6 +156,15 @@ export class GoogleDriveController {
   async deleteAllAccess(@Param() dto: GoogleSearchEmailDto) {
     await this.googleDriveService.deleteAccessDisk(dto.driveId, dto.email);
     return { message: 'Доступ удален' };
+  }
+
+  @Get('all')
+  async getData() {
+    return [await this.getDrives(), await this.getDoc()];
+  }
+  @Get('all/:email')
+  async getDataEmail(@Param() dto: GoogleSearchEmailDto) {
+    return [await this.getDisk(dto), await this.getAllFiles(dto)];
   }
 
   @Delete('all/access/:email')
