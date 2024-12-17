@@ -4,3 +4,4 @@
   variant="text">
   </v-btn>
 </template>
+<script setup lang="ts">

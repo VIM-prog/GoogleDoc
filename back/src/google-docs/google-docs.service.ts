@@ -45,19 +45,23 @@ export class GoogleDriveService {
   }
 
   /**
+   * Получение email сервисного аккаунта
+   * @private
+   */
+  private getServiceAccountEmail(): string {
+    const key = this.configService.get<string>('KEY');
+    const credentials = JSON.parse(key);
+    return credentials.client_email.toLowerCase();
+  }
+
+  /**
    * Диски доступные нам или пользователю (форматирование: id, name, role)
    * @param email - email пользователя
    */
   async listDrives(email?: string) {
-    let searchEmail: string;
-    if (email) {
-      searchEmail = email.toLowerCase();
-    } else {
-      const key = this.configService.get<string>('KEY');
-      const credentials = JSON.parse(key);
-      const myEmail = credentials.client_email;
-      searchEmail = myEmail.toLowerCase();
-    }
+    const searchEmail = email
+      ? email.toLowerCase()
+      : this.getServiceAccountEmail();
     const drives = await this.listIdDrives();
     let listDrive = [];
     for (const drive of drives) {
@@ -102,31 +106,27 @@ export class GoogleDriveService {
         parentId = parent.data.parents ? parent.data.parents[0] : null;
       }
       return path;
-    } catch {
-      return null;
+    } catch (error) {
+      this.logger.error('Error building file path:', error);
     }
   }
 
   /**
-   * Получение файлов (без файлов на дисках, к которым пользователь имеет доступ)
-   * @param email - email пользователя
+   * Получения файлов
+   * @param email
    */
   async getFiles(email?: string) {
-    let drives: string;
-    let q: string;
-    if (email) {
-      drives = (await this.listDrives(email))
-        .map((drive) => `'${drive.id}'`)
-        .join(' or ');
-      q = `'${email}' in readers and (trashed = false) and not ${drives} in parents`;
-    } else {
-      drives = (await this.listDrives())
-        .map((drive) => `'${drive.id}'`)
-        .join(' or ');
-      q = `(trashed = false) and not ${drives} in parents`;
-    }
+    const myEmail = this.getServiceAccountEmail();
+    const drives = (await this.listDrives(email))
+      .map((drive) => `'${drive.id}'`)
+      .join(' or ');
+    const rCond = email
+      ? `not '${email}' in owners and '${email}' in readers and '${myEmail}' in writers and`
+      : '';
+    const drCond = drives ? ` and not ${drives} in parents` : '';
+    const q = `${rCond}(trashed = false)${drCond}`;
     let nextPageToken: string;
-    let allFiles = [];
+    let allFiles: any[] = [];
     do {
       const res = await this.drive.files.list({
         includeItemsFromAllDrives: true,
@@ -154,7 +154,7 @@ export class GoogleDriveService {
   }
 
   /**
-   * Удаление доступа к одному файлу (Работает только если не имеет доступ к диску или родительскому элементу)
+   * Удаление доступа к одному файлу
    * @param email - email пользователя
    * @param fileId - id файла, к которому мы хотим удалить доступ
    * @private
