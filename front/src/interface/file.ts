@@ -3,5 +3,6 @@ export interface file {
   name: string;
   parents: string[],
   fileType: string;
+  role: string;
   path: string;
 }

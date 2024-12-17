@@ -3,16 +3,16 @@
     <v-card-title>Файлы</v-card-title>
     <v-divider></v-divider>
     <v-list>
-      <v-list-item v-for="file in docs" :key="file.id">
-          <v-list-item-title>{{ file.name }}</v-list-item-title>
-          <v-list-item-subtitle class="grey--text">
-            {{ file.fileType }}
-          </v-list-item-subtitle>
-          <v-list-item-subtitle class="grey--text">
-            Путь: {{ file.path }}
+      <v-list-item v-for="doc in docs" :key="doc.id">
+          <v-list-item-title>{{ doc.name }}</v-list-item-title>
+        <v-list-item-subtitle class="grey--text">
+          {{ doc.role }}
+        </v-list-item-subtitle>
+          <v-list-item-subtitle v-if="doc.path != doc.name" class="grey--text">
+            {{ doc.path }}
           </v-list-item-subtitle>
         <template v-slot:prepend>
-          <v-icon :icon=getFileIcon(file.fileType)></v-icon>
+          <v-icon :icon=getFileIcon(doc.fileType)></v-icon>
         </template>
       </v-list-item>
     </v-list>
@@ -23,15 +23,17 @@
 </template>
 
 <script setup lang="ts">
-import {onMounted, ref} from "vue";
-import docsRequest from '@/modules/google/api/getDocs';
+import {onMounted, ref } from "vue";
+import {getDocuments} from '@/modules/google/api/get';
 import type { file } from "@/interface/file";
-
+import {useEmailStore} from "@/shared/store/email";
 const docs = ref<file[]>([]);
+const emailStore = useEmailStore();
+const email = ref(emailStore.email);
 
 onMounted(async () => {
   try {
-    const response = await docsRequest;
+    const response = await getDocuments();
     docs.value = response.data;
   } catch (error) {
     console.error('Провал загрузки файлов:', error);

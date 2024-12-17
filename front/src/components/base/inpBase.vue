@@ -14,9 +14,8 @@
 
 <script setup lang="ts">
 import { defineProps, defineEmits } from 'vue';
-
-const props = defineProps({
+defineProps({
   modelValue: String,
 });
-const emit = defineEmits(['update:modelValue']);
+defineEmits(['update:modelValue']);
 </script>

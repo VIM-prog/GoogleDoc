@@ -50,8 +50,8 @@ export const params = {
 
 export const statusesOk = {
   drives: {
-    status: 200,
     description: 'Успешное получение списка дисков',
+    status: 200,
   },
   docs: {
     status: 200,

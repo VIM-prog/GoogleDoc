@@ -18,18 +18,16 @@
 </template>
 
 <script setup lang="ts">
-import {inject, onMounted, ref} from "vue";
-import drivesRequest from '@/modules/google/api/getDrive'
+import {onMounted, ref} from "vue";
+import {getDrives} from '@/modules/google/api/get';
 import type {drive} from "@/interface/drive";
 
 const drives = ref<drive[]>([]);
 
-const email = inject('email');
-console.log(email)
 
 onMounted(async () => {
   try {
-    const response = await drivesRequest;
+    const response = await getDrives();
     drives.value = response.data;
   } catch (error) {
     console.error('Провал загрузки дисков:', error);
