@@ -1,18 +1,21 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { drive_v3, google } from 'googleapis';
+import Schema$Drive = drive_v3.Schema$Drive;
+import Schema$File = drive_v3.Schema$File;
+import Schema$Permission = drive_v3.Schema$Permission;
 
 @Injectable()
 export class GoogleDriveService {
   private drive: drive_v3.Drive;
-  private readonly logger = new Logger(GoogleDriveService.name);
+  private readonly logger: Logger = new Logger(GoogleDriveService.name);
   constructor(public configService: ConfigService) {
-    const key = this.configService.get<string>('KEY');
+    const key: string = this.configService.get<string>('KEY');
     if (!key) {
       throw new Error('ключ не был инициализирован');
     }
     try {
-      const credentials = JSON.parse(key);
+      const credentials: any = JSON.parse(key);
       const auth = new google.auth.GoogleAuth({
         credentials: credentials,
         scopes: [
@@ -33,7 +36,7 @@ export class GoogleDriveService {
    * Получение доступных дисков
    * @private
    */
-  private async listIdDrives() {
+  private async listIdDrives(): Promise<Schema$Drive[]> {
     try {
       const res = await this.drive.drives.list({
         fields: 'drives(id, name)',
@@ -45,30 +48,35 @@ export class GoogleDriveService {
   }
 
   /**
+   * Получение email сервисного аккаунта
+   * @private
+   */
+  private getServiceAccountEmail(): string {
+    const key: string = this.configService.get<string>('KEY');
+    const credentials: any = JSON.parse(key);
+    return credentials.client_email.toLowerCase();
+  }
+
+  /**
    * Диски доступные нам или пользователю (форматирование: id, name, role)
    * @param email - email пользователя
    */
-  async listDrives(email?: string) {
-    let searchEmail: string;
-    if (email) {
-      searchEmail = email.toLowerCase();
-    } else {
-      const key = this.configService.get<string>('KEY');
-      const credentials = JSON.parse(key);
-      const myEmail = credentials.client_email;
-      searchEmail = myEmail.toLowerCase();
-    }
-    const drives = await this.listIdDrives();
-    let listDrive = [];
+  async listDrives(email?: string): Promise<any> {
+    const searchEmail: string = email
+      ? email.toLowerCase()
+      : this.getServiceAccountEmail();
+    const drives: Schema$Drive[] = await this.listIdDrives();
+    let listDrive: any[] = [];
     for (const drive of drives) {
       const perms = await this.drive.permissions.list({
         fileId: drive.id,
         fields: 'permissions(id, emailAddress, role)',
         supportsAllDrives: true,
       });
-      const permissionsList = perms.data.permissions;
-      const perm = permissionsList.find(
-        (p) => p.emailAddress.toLowerCase() === searchEmail,
+      const permissionsList: Schema$Permission[] = perms.data.permissions;
+      const perm: Schema$Permission = permissionsList.find(
+        (p: Schema$Permission): boolean =>
+          p.emailAddress.toLowerCase() === searchEmail,
       );
       if (perm) {
         listDrive = listDrive.concat({
@@ -86,9 +94,9 @@ export class GoogleDriveService {
    * @param file - файл, к которому строится путь
    * @private - используется только внутри сервиса
    */
-  private async buildFilePath(file: drive_v3.Schema$File) {
-    let path = file.name;
-    let parentId = file.parents ? file.parents[0] : null;
+  private async buildFilePath(file: drive_v3.Schema$File): Promise<string> {
+    let path: string = file.name;
+    let parentId: string = file.parents ? file.parents[0] : null;
     try {
       while (parentId) {
         const parent = await this.drive.files.get({
@@ -102,31 +110,24 @@ export class GoogleDriveService {
         parentId = parent.data.parents ? parent.data.parents[0] : null;
       }
       return path;
-    } catch {
-      return null;
+    } catch (error) {
+      this.logger.error('Ошибка в построении пути:', error);
     }
   }
 
-  /**
-   * Получение файлов (без файлов на дисках, к которым пользователь имеет доступ)
-   * @param email - email пользователя
-   */
-  async getFiles(email?: string) {
-    let drives: string;
-    let q: string;
-    if (email) {
-      drives = (await this.listDrives(email))
-        .map((drive) => `'${drive.id}'`)
-        .join(' or ');
-      q = `'${email}' in readers and (trashed = false) and not ${drives} in parents`;
-    } else {
-      drives = (await this.listDrives())
-        .map((drive) => `'${drive.id}'`)
-        .join(' or ');
-      q = `(trashed = false) and not ${drives} in parents`;
-    }
+  //todo доделать роли
+  async getFiles(email?: string): Promise<any> {
+    const myEmail: string = this.getServiceAccountEmail();
+    const drives: string = (await this.listDrives(email))
+      .map((drive: any): string => `'${drive.id}'`)
+      .join(' or ');
+    const rCond: string = email
+      ? `not '${email}' in owners and '${email}' in readers and '${myEmail}' in writers and `
+      : '';
+    const drCond: string = drives ? ` and not ${drives} in parents` : '';
+    const q = `${rCond}(trashed = false)${drCond}`;
     let nextPageToken: string;
-    let allFiles = [];
+    let allFiles: any[] = [];
     do {
       const res = await this.drive.files.list({
         includeItemsFromAllDrives: true,
@@ -136,39 +137,41 @@ export class GoogleDriveService {
         fields: 'nextPageToken, files(id, name, parents, mimeType)',
         pageSize: 100,
       });
-      const files = res.data.files;
+      const files: Schema$File[] = res.data.files;
       if (!files || files.length === 0) {
-        return [];
+        return allFiles;
       }
-      const processedFiles = await Promise.all(
-        files.map(async (file) => {
-          const path = await this.buildFilePath(file);
-          const fileType = this.getFileType(file.mimeType);
+
+      const filesWithPermissions = await Promise.all(
+        files.map(async (file: Schema$File) => {
+          const path: string = await this.buildFilePath(file);
+          const fileType: string = this.getFileType(file.mimeType);
           return { ...file, fileType, path };
         }),
       );
+      allFiles = allFiles.concat(filesWithPermissions);
       nextPageToken = res.data.nextPageToken;
-      allFiles = allFiles.concat(processedFiles);
     } while (nextPageToken);
     return allFiles;
   }
 
   /**
-   * Удаление доступа к одному файлу (Работает только если не имеет доступ к диску или родительскому элементу)
+   * Удаление доступа к одному файлу
    * @param email - email пользователя
    * @param fileId - id файла, к которому мы хотим удалить доступ
    * @private
    */
-  async deleteOneAccess(email: string, fileId: string) {
-    const searchEmail = email.toLowerCase();
+  async deleteOneAccess(email: string, fileId: string): Promise<void> {
+    const searchEmail: string = email.toLowerCase();
     const perms = await this.drive.permissions.list({
       fileId: fileId,
       fields: 'permissions(id, emailAddress, role)',
       supportsAllDrives: true,
     });
-    const permissionsList = perms.data.permissions;
-    const perm = permissionsList.find(
-      (p) => p.emailAddress.toLowerCase() === searchEmail,
+    const permissionsList: Schema$Permission[] = perms.data.permissions;
+    const perm: Schema$Permission = permissionsList.find(
+      (p: Schema$Permission): boolean =>
+        p.emailAddress.toLowerCase() === searchEmail,
     );
     if (perm) {
       try {
@@ -188,7 +191,7 @@ export class GoogleDriveService {
    * @param driveId - id диска, к которому хотим удалить доступ
    * @param email - email пользователя
    */
-  async deleteAccessDisk(driveId: string, email: string) {
+  async deleteAccessDisk(driveId: string, email: string): Promise<void> {
     try {
       await this.deleteOneAccess(email, driveId);
     } catch (error) {
@@ -200,13 +203,13 @@ export class GoogleDriveService {
    * Удаления пользователя ко всем файлам и дискам
    * @param email - email пользователя
    */
-  async deleteAccessAllDisks(email: string) {
+  async deleteAccessAllDisks(email: string): Promise<void> {
     try {
-      const drives = await this.listDrives();
+      const drives: any[] = await this.listDrives();
       for (const drive of drives) {
         await this.deleteOneAccess(email, drive.id);
       }
-      const files = await this.getFiles(email);
+      const files: any[] = await this.getFiles(email);
       for (const file of files) {
         await this.deleteOneAccess(email, file.id);
       }

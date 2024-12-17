@@ -7,18 +7,12 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
-    BaseButton: typeof import('./src/components/base/baseButton.vue')['default']
-    BaseInput: typeof import('./src/components/base/baseInput.vue')['default']
-    Btn: typeof import('./src/components/base/btn.vue')['default']
-    Button: typeof import('./src/components/base/button.vue')['default']
-    DeleteAccess: typeof import('./src/components/base/deleteAccess.vue')['default']
-    DeleteButton: typeof import('./src/components/base/deleteButton.vue')['default']
-    DeleteInput: typeof import('./src/components/base/input.vue')['default']
-    Inp: typeof import('./src/components/base/inp.vue')['default']
-    Input: typeof import('./src/components/base/input.vue')['default']
+    Btn: typeof import('./src/components/base/btnBase.vue')['default']
+    BtnBase: typeof import('./src/components/base/btnBase.vue')['default']
+    Inp: typeof import('./src/components/base/inpBase.vue')['default']
+    InpBase: typeof import('./src/components/base/inpBase.vue')['default']
     Menu: typeof import('./src/components/ui/menu.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
-    Search: typeof import('./src/components/base/search.vue')['default']
   }
 }
