@@ -1,5 +1,5 @@
 import {createRouter, createWebHistory} from "vue-router";
-import ourFiles from "@/pages/ourFiles.vue";
+import searcher from "@/pages/searcher.vue";
 import notFound from "@/layout/errors/notFound.vue";
 
 export default createRouter({
@@ -7,7 +7,7 @@ export default createRouter({
   routes: [
     {
       path: '/',
-      component: ourFiles,
+      component: searcher,
     },
     {
       path: '/:pathMatch(.*)*',

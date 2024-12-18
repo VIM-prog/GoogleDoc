@@ -1,30 +1,27 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import {computed, ref} from "vue";
 import Btn from "@/components/base/btnBase.vue";
 import Inp from "@/components/base/inpBase.vue";
 import { useEmailStore } from "@/shared/store/email";
-import {useTheme} from "vuetify";
+import { useTheme } from "vuetify";
+
 const emailStore = useEmailStore();
-const email = computed({
-  get: () => emailStore.email,
-  set: (value) => {
-    emailStore.email = value;
-  },
-});
+const localEmail = ref(emailStore.email);
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const hasError = computed(() => !emailRegex.test(email.value) && email.value !== '');
+const hasError = computed(() => !emailRegex.test(localEmail.value) && localEmail.value !== '');
 const errorMessage = computed(() => hasError.value ? "Неправильный email" : "");
-const isButtonDisabled = computed(() => hasError.value || !email.value);
+const isButtonDisabled = computed(() => hasError.value || !localEmail.value);
 
 const handleSubmit = () => {
   if (!isButtonDisabled.value) {
-    console.log("Email принят:", email.value);
+    emailStore.setEmail(localEmail.value);
   }
-}
-const theme = useTheme()
+};
+
+const theme = useTheme();
 const switchTheme = () => {
-  theme.global.name.value = theme.global.current.value.dark ? 'light' : 'dark'
-}
+  theme.global.name.value = theme.global.current.value.dark ? "light" : "dark";
+};
 </script>
 
 <template>
@@ -32,7 +29,8 @@ const switchTheme = () => {
     <v-toolbar-title>uwu</v-toolbar-title>
     <v-spacer></v-spacer>
     <inp
-      v-model="email"
+      :model-value="localEmail"
+      @update:model-value="localEmail = $event"
       class="flex-grow-1"
       type="email"
       :error="hasError"
