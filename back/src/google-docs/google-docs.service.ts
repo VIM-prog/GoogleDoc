@@ -5,6 +5,7 @@ import Schema$Drive = drive_v3.Schema$Drive;
 import Schema$File = drive_v3.Schema$File;
 import Schema$Permission = drive_v3.Schema$Permission;
 
+//todo править бэк
 @Injectable()
 export class GoogleDriveService {
   private drive: drive_v3.Drive;
@@ -58,26 +59,39 @@ export class GoogleDriveService {
   }
 
   /**
+   * Получение роли
+   * @param email - email пользователя
+   * @param fileId - id файла, у которого мы хотим посмотреть разрешения
+   * @private
+   */
+  private async getPerm(
+    email: string,
+    fileId: string,
+  ): Promise<Schema$Permission> {
+    const searchEmail: string = email
+      ? email.toLowerCase()
+      : this.getServiceAccountEmail();
+    const perms = await this.drive.permissions.list({
+      fileId: fileId,
+      fields: 'permissions(id, emailAddress, role)',
+      supportsAllDrives: true,
+    });
+    const permissionsList: Schema$Permission[] = perms.data.permissions;
+    return permissionsList.find(
+      (p: Schema$Permission): boolean =>
+        p.emailAddress.toLowerCase() === searchEmail,
+    );
+  }
+
+  /**
    * Диски доступные нам или пользователю (форматирование: id, name, role)
    * @param email - email пользователя
    */
   async listDrives(email?: string): Promise<any> {
-    const searchEmail: string = email
-      ? email.toLowerCase()
-      : this.getServiceAccountEmail();
     const drives: Schema$Drive[] = await this.listIdDrives();
     let listDrive: any[] = [];
     for (const drive of drives) {
-      const perms = await this.drive.permissions.list({
-        fileId: drive.id,
-        fields: 'permissions(id, emailAddress, role)',
-        supportsAllDrives: true,
-      });
-      const permissionsList: Schema$Permission[] = perms.data.permissions;
-      const perm: Schema$Permission = permissionsList.find(
-        (p: Schema$Permission): boolean =>
-          p.emailAddress.toLowerCase() === searchEmail,
-      );
+      const perm: Schema$Permission = await this.getPerm(email, drive.id);
       if (perm) {
         listDrive = listDrive.concat({
           id: drive.id,
@@ -115,17 +129,23 @@ export class GoogleDriveService {
     }
   }
 
-  //todo доделать роли
-  async getFiles(email?: string): Promise<any> {
+  /**
+   * Получение документов
+   * @param email - email пользователя
+   */
+  async getFiles(email?: string): Promise<any[]> {
     const myEmail: string = this.getServiceAccountEmail();
-    const drives: string = (await this.listDrives(email))
-      .map((drive: any): string => `'${drive.id}'`)
-      .join(' or ');
     const rCond: string = email
       ? `not '${email}' in owners and '${email}' in readers and '${myEmail}' in writers and `
       : '';
-    const drCond: string = drives ? ` and not ${drives} in parents` : '';
-    const q = `${rCond}(trashed = false)${drCond}`;
+    let drives: string[] = [];
+    if (email) {
+      const driveList = await this.listDrives(email);
+      drives = driveList.map((drive: any) => `'${drive.id}'`);
+    }
+    const drCond =
+      drives.length > 0 ? ` and (${drives.join(' or ')}) in parents` : '';
+    const q = ` ${rCond}trashed = false${drCond}`;
     let nextPageToken: string;
     let allFiles: any[] = [];
     do {
@@ -137,16 +157,23 @@ export class GoogleDriveService {
         fields: 'nextPageToken, files(id, name, parents, mimeType)',
         pageSize: 100,
       });
-      const files: Schema$File[] = res.data.files;
-      if (!files || files.length === 0) {
-        return allFiles;
-      }
 
+      const files = res.data.files;
+      if (files && files.length > 0) {
+        nextPageToken = res.data.nextPageToken;
+      }
       const filesWithPermissions = await Promise.all(
         files.map(async (file: Schema$File) => {
           const path: string = await this.buildFilePath(file);
           const fileType: string = this.getFileType(file.mimeType);
-          return { ...file, fileType, path };
+          let role: string | null = null;
+          try {
+            const perm: Schema$Permission = await this.getPerm(email, file.id);
+            if (perm) role = perm.role;
+            return { ...file, fileType, path, role };
+          } catch {
+            return { ...file, fileType, path };
+          }
         }),
       );
       allFiles = allFiles.concat(filesWithPermissions);
@@ -162,17 +189,7 @@ export class GoogleDriveService {
    * @private
    */
   async deleteOneAccess(email: string, fileId: string): Promise<void> {
-    const searchEmail: string = email.toLowerCase();
-    const perms = await this.drive.permissions.list({
-      fileId: fileId,
-      fields: 'permissions(id, emailAddress, role)',
-      supportsAllDrives: true,
-    });
-    const permissionsList: Schema$Permission[] = perms.data.permissions;
-    const perm: Schema$Permission = permissionsList.find(
-      (p: Schema$Permission): boolean =>
-        p.emailAddress.toLowerCase() === searchEmail,
-    );
+    const perm: Schema$Permission = await this.getPerm(email, fileId);
     if (perm) {
       try {
         await this.drive.permissions.delete({

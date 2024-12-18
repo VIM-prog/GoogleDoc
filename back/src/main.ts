@@ -43,7 +43,7 @@ async function bootstrap() {
   if (nodeEnv === 'development') {
     app.enableCors({
       origin: host,
-      methods: ['GET', 'POST'],
+      methods: ['GET', 'POST', 'DELETE'],
       credentials: true,
     });
     await app.listen(port);
