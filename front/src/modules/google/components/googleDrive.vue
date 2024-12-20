@@ -4,7 +4,7 @@
     <v-card-title>Диски</v-card-title>
     <v-divider></v-divider>
     <v-list>
-      <v-list-item v-for="drive in drives" :key="drive.id">
+      <v-list-item v-for="drive in displayedDr" :key="drive.id">
         <v-list-item-title>{{ drive.name }}</v-list-item-title>
         <v-list-item-subtitle>{{ drive.role }}</v-list-item-subtitle>
         <template v-slot:prepend>
@@ -31,11 +31,17 @@
     <div v-else-if="drives.length === 0" class="text-center">
       Дисков нет
     </div>
+    <v-pagination
+      v-model="page"
+      :length="pageCount"
+      circle
+      class="mt-4"
+    ></v-pagination>
   </v-card>
 </template>
 
 <script setup lang="ts">
-import {onMounted, ref, watch} from "vue";
+import {computed, onMounted, ref, watch} from "vue";
 import {getDrives, getDrivesWithEmail} from '@/modules/google/api/get';
 import type {drive} from "@/modules/google/interface/drive";
 import btn from "@/components/base/btnBase.vue";
@@ -44,6 +50,8 @@ const props = defineProps(['email'])
 const drives = ref<drive[]>([]);
 
 const loading = ref<boolean>(true);
+const page = ref(1);
+const itemsPerPage = 10;
 
 const fetchDrives = async () => {
   loading.value = true;
@@ -61,10 +69,22 @@ watch(
   () =>props.email,
   async () => {
     drives.value = []
+    page.value = 1;
     await fetchDrives();
   },
   { immediate: true }
 );
+
+const pageCount = computed(() => Math.ceil(drives.value.length / itemsPerPage));
+
+const displayedDr = computed(() => {
+  const start = (page.value - 1) * itemsPerPage;
+  const end = start + itemsPerPage;
+  return drives.value.slice(start, end);
+});
+watch(page, () => {
+  window.scrollTo(0, 0);
+});
 
 onMounted(fetchDrives);
 </script>

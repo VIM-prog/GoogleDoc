@@ -7,12 +7,8 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
-    AlertBase: typeof import('./src/components/base/alertBase.vue')['default']
-    Btn: typeof import('./src/components/base/btnBase.vue')['default']
     BtnBase: typeof import('./src/components/base/btnBase.vue')['default']
-    Inp: typeof import('./src/components/base/inpBase.vue')['default']
     InpBase: typeof import('./src/components/base/inpBase.vue')['default']
-    Menu: typeof import('./src/components/ui/menu.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
   }

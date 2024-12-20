@@ -38,7 +38,7 @@ export class GoogleDriveController {
   @ApiParam(params.email)
   @Get('documents/:email')
   async getDocEmail(@Param() dto: GoogleSearchEmailDto) {
-    return this.googleDriveService.getFiles(dto.email);
+    return this.googleDriveService.getFilesWithEmail(dto.email);
   }
 
   @ApiOperation(operation.drivesWithEmail)
@@ -48,7 +48,7 @@ export class GoogleDriveController {
   @ApiParam(params.email)
   @Get('drive/:email')
   async getDrivesEmail(@Param() dto: GoogleSearchEmailDto) {
-    return this.googleDriveService.listDrives(dto.email);
+    return this.googleDriveService.listDrivesEmail(dto.email);
   }
 
   @ApiOperation(operation.deleteOne)
@@ -75,16 +75,6 @@ export class GoogleDriveController {
     await this.googleDriveService.deleteAccessDisk(dto.driveId, dto.email);
     return { message: 'Доступ удален' };
   }
-
-  //todo разобраться нужно ли это и не проще ли загружать отдельными блоками
-  /*@Get('all')
-  async getData() {
-    return [await this.getDrives(), await this.getDoc()];
-  }
-  @Get('all/:email')
-  async getDataEmail(@Param() dto: GoogleSearchEmailDto) {
-    return [await this.getDisk(dto), await this.getAllFiles(dto)];
-  }*/
 
   @Delete('allAccess/:email')
   @ApiOperation(operation.deleteAllPerm)

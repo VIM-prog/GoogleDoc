@@ -67,7 +67,7 @@ export class GoogleDriveService {
   private async getPerm(
     email: string,
     fileId: string,
-  ): Promise<Schema$Permission> {
+  ): Promise<Schema$Permission | undefined> {
     const searchEmail: string = email
       ? email.toLowerCase()
       : this.getServiceAccountEmail();
@@ -104,6 +104,27 @@ export class GoogleDriveService {
   }
 
   /**
+   * Диски доступные пользователю, на которых google account является владельцем
+   * @param email - email пользователя
+   */
+  async listDrivesEmail(email: string): Promise<any> {
+    const drives: any[] = await this.listDrives(email);
+    const filteredDrives: any[] = [];
+    for (const drive of drives) {
+      const perm: Schema$Permission = await this.getPerm(email, drive.id);
+      const myPerm: Schema$Permission = await this.getPerm(undefined, drive.id);
+      if (myPerm && myPerm.role === 'organizer') {
+        filteredDrives.push({
+          id: drive.id,
+          name: drive.name,
+          role: perm.role,
+        });
+      }
+    }
+    return filteredDrives;
+  }
+
+  /**
    * Строительство пути
    * @param file - файл, к которому строится путь
    * @private - используется только внутри сервиса
@@ -131,57 +152,81 @@ export class GoogleDriveService {
 
   /**
    * Получение документов
-   * @param email - email пользователя
    */
-  async getFiles(email?: string): Promise<any[]> {
-    const myEmail: string = this.getServiceAccountEmail();
-    const rCond: string = email
-      ? `not '${email}' in owners and '${email}' in readers and '${myEmail}' in writers and `
-      : '';
-    let drives: string[] = [];
-    if (email) {
-      const driveList = await this.listDrives(email);
-      drives = driveList.map((drive: any) => `'${drive.id}'`);
-    }
-    const drCond =
-      drives.length > 0 ? ` and (${drives.join(' or ')}) in parents` : '';
-    const q = ` ${rCond}trashed = false${drCond}`;
+  async getFiles(): Promise<any[]> {
     let nextPageToken: string;
     let allFiles: any[] = [];
     do {
       const res = await this.drive.files.list({
         includeItemsFromAllDrives: true,
-        supportsAllDrives: true,
-        q: q,
+        supportsTeamDrives: true,
         pageToken: nextPageToken || null,
         fields: 'nextPageToken, files(id, name, parents, mimeType)',
         pageSize: 100,
       });
-
       const files = res.data.files;
-      if (files && files.length > 0) {
-        nextPageToken = res.data.nextPageToken;
-      }
-      const filesWithPermissions = await Promise.all(
-        files.map(async (file: Schema$File) => {
-          const path: string = await this.buildFilePath(file);
-          const fileType: string = this.getFileType(file.mimeType);
-          let role: string | null = null;
-          try {
-            const perm: Schema$Permission = await this.getPerm(email, file.id);
-            if (perm) role = perm.role;
-            return { ...file, fileType, path, role };
-          } catch {
-            return { ...file, fileType, path };
-          }
-        }),
-      );
+      const filesWithPermissions = await this.processFiles(files);
       allFiles = allFiles.concat(filesWithPermissions);
       nextPageToken = res.data.nextPageToken;
     } while (nextPageToken);
     return allFiles;
   }
 
+  async getFilesWithEmail(email: string): Promise<any[]> {
+    const myDrives: any = await this.listDrives();
+    const userDriveIds: any = (await this.listDrives(email)).map(
+      (drive: any) => drive.id,
+    );
+    const searchDrives: any = myDrives.filter(
+      (x: any) => !userDriveIds.includes(x.id),
+    );
+    let allFiles: any[] = [];
+    for (const drive of searchDrives) {
+      let nextPageToken: string | null = null;
+      do {
+        const res = await this.drive.files.list({
+          includeItemsFromAllDrives: true,
+          corpora: 'drive',
+          supportsAllDrives: true,
+          pageToken: nextPageToken,
+          q: `'${email}' in readers and not '${email}' in owners`,
+          fields: 'nextPageToken, files(id, name, parents, mimeType)',
+          pageSize: 100,
+          driveId: drive.id,
+        });
+        const files: Schema$File[] = res.data.files || [];
+        const filesWithPermissions: any[] = await this.processFiles(files);
+        allFiles = allFiles.concat(filesWithPermissions);
+        nextPageToken = res.data.nextPageToken;
+      } while (nextPageToken);
+    }
+    return allFiles;
+  }
+
+  /**
+   * Построение пути и получение роли
+   * @param files - передаваемые файлы
+   * @private
+   */
+  private async processFiles(files: drive_v3.Schema$File[]): Promise<any[]> {
+    return Promise.all(
+      files.map(async (file: Schema$File) => {
+        const path: string = await this.buildFilePath(file);
+        const fileType: string = this.getFileType(file.mimeType);
+        let role: string | null = null;
+        try {
+          const perm: Schema$Permission = await this.getPerm(
+            undefined,
+            file.id,
+          );
+          if (perm) role = perm.role;
+        } catch {
+          return { ...file, fileType, path };
+        }
+        return { ...file, fileType, path, role };
+      }),
+    );
+  }
   /**
    * Удаление доступа к одному файлу
    * @param email - email пользователя
@@ -226,7 +271,7 @@ export class GoogleDriveService {
       for (const drive of drives) {
         await this.deleteOneAccess(email, drive.id);
       }
-      const files: any[] = await this.getFiles(email);
+      const files: any[] = await this.getFilesWithEmail(email);
       for (const file of files) {
         await this.deleteOneAccess(email, file.id);
       }
