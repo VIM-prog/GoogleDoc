@@ -25,7 +25,8 @@ export async function deleteDocsAccess(email: string, fileId: string) {
         driveId: fileId
       }
     });
-  } catch {
-    console.error('Невозможно удалить наследованное разрешение')
+  } catch (error) {
+    console.info('Невозможно удалить наследованное разрешение')
+    throw error
   }
 }
