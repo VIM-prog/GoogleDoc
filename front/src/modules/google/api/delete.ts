@@ -25,8 +25,7 @@ export async function deleteDocsAccess(email: string, fileId: string) {
         driveId: fileId
       }
     });
-  } catch (error) {
-    console.error('Ошибка при удалении диска:', error);
-    throw error;
+  } catch {
+    console.warn('Невозможно удалить наследованное разрешение')
   }
 }
