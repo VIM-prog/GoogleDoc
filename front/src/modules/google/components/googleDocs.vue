@@ -21,10 +21,12 @@
           <btn v-if="props.email"
                icon="$delete"
                @click="async () => {
+                 docs = []
+                 await fetchDocuments();
                 try {
                   await deleteDocsAccess(props.email, doc.id);
-                  await fetchDocuments();
                 } catch {
+                  console.log('us')
                   showAlert();
                 }
               }"

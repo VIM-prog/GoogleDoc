@@ -5,7 +5,6 @@ import Schema$Drive = drive_v3.Schema$Drive;
 import Schema$File = drive_v3.Schema$File;
 import Schema$Permission = drive_v3.Schema$Permission;
 
-//todo править бэк
 @Injectable()
 export class GoogleDriveService {
   private drive: drive_v3.Drive;
@@ -165,7 +164,7 @@ export class GoogleDriveService {
         pageSize: 100,
       });
       const files = res.data.files;
-      const filesWithPermissions = await this.processFiles(files);
+      const filesWithPermissions: any[] = await this.processFiles(files);
       allFiles = allFiles.concat(filesWithPermissions);
       nextPageToken = res.data.nextPageToken;
     } while (nextPageToken);
@@ -175,10 +174,10 @@ export class GoogleDriveService {
   async getFilesWithEmail(email: string): Promise<any[]> {
     const myDrives: any = await this.listDrives();
     const userDriveIds: any = (await this.listDrives(email)).map(
-      (drive: any) => drive.id,
+      (drive: any): any => drive.id,
     );
     const searchDrives: any = myDrives.filter(
-      (x: any) => !userDriveIds.includes(x.id),
+      (x: any): boolean => !userDriveIds.includes(x.id),
     );
     let allFiles: any[] = [];
     for (const drive of searchDrives) {
@@ -195,7 +194,10 @@ export class GoogleDriveService {
           driveId: drive.id,
         });
         const files: Schema$File[] = res.data.files || [];
-        const filesWithPermissions: any[] = await this.processFiles(files);
+        const filesWithPermissions: any[] = await this.processFiles(
+          files,
+          email,
+        );
         allFiles = allFiles.concat(filesWithPermissions);
         nextPageToken = res.data.nextPageToken;
       } while (nextPageToken);
@@ -206,19 +208,20 @@ export class GoogleDriveService {
   /**
    * Построение пути и получение роли
    * @param files - передаваемые файлы
+   * @param email
    * @private
    */
-  private async processFiles(files: drive_v3.Schema$File[]): Promise<any[]> {
+  private async processFiles(
+    files: drive_v3.Schema$File[],
+    email?: string,
+  ): Promise<any[]> {
     return Promise.all(
       files.map(async (file: Schema$File) => {
         const path: string = await this.buildFilePath(file);
         const fileType: string = this.getFileType(file.mimeType);
         let role: string | null = null;
         try {
-          const perm: Schema$Permission = await this.getPerm(
-            undefined,
-            file.id,
-          );
+          const perm: Schema$Permission = await this.getPerm(email, file.id);
           if (perm) role = perm.role;
         } catch {
           return { ...file, fileType, path };
