@@ -14,6 +14,7 @@
           <btn
             icon=$delete
             @click="async () => {
+              drives = []
               await deleteDriveAccess(props.email, drive.id)
               await fetchDrives()
             }"
